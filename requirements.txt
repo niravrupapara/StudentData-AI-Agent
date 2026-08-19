@@ -1,0 +1,14 @@
+streamlit
+python-dotenv
+
+pandas
+
+langchain
+langchain-core
+langchain-community
+langchain-mistralai
+langchain-huggingface
+langgraph
+
+sentence-transformers
+faiss-cpu

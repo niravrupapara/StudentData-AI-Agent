@@ -216,3 +216,37 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ====================================================================
+# StudentData-AI-Agent Specific Ignored Paths
+# ====================================================================
+
+# Local vector store & index binaries
+storage/
+storage/indexes/
+*.faiss
+*.pkl
+
+# Uploaded student datasets & processed files
+data/uploads/*
+data/processed/*
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
+
+# Application logs
+logs/*
+!logs/.gitkeep
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor configurations
+.vscode/
+.idea/
+
+# Environment files
+.env*.local
+.env.*
+!.env.example
