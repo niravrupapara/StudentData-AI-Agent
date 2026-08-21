@@ -18,10 +18,7 @@ class Settings:
         "mistral-small-latest",
     )
 
-    EMBEDDING_MODEL: str = os.getenv(
-        "EMBEDDING_MODEL",
-        "BAAI/bge-small-en-v1.5",
-    )
+    EMBEDDING_MODEL: str = "./models/all-MiniLM-L6-v2"
 
     TOP_K: int = int(os.getenv("TOP_K", "5"))
 

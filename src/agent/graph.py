@@ -1,129 +1,140 @@
 # src/agent/graph.py
 
-from typing import Any
-
 from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode
 
-from src.agent.planner import plan_intent
-from src.agent.response_generator import generate_response
 from src.agent.state import AgentState
-from src.tools.pandas_tool import execute_pandas_query
-from src.tools.rag_tool import execute_rag_query
-from src.agent.pandas_query_generator import generate_pandas_query
-
+from src.llm.client import llm
+from src.llm.prompts import TOOL_CALLING_SYSTEM_PROMPT
+from src.tools.pandas_tool import create_pandas_tool
+from src.tools.rag_tool import create_rag_tool
 from src.utils.logger import get_logger
 
 
 logger = get_logger(__name__)
 
 
-def _run_data_tools(state: AgentState) -> dict:
+def build_student_agent_graph(
+    dataframe,
+    schema,
+    vector_store,
+):
     """
-    Execute both Pandas and RAG for a DATA query.
-    """
+    Build the optimized Student Data Agent graph.
 
-    logger.info("Executing DATA pipeline: Pandas + RAG")
-
-    dataframe = state.get("dataframe")
-    vector_store = state.get("vector_store")
-    user_query = state["user_query"]
-
-    if dataframe is None:
-        raise ValueError("DataFrame is not available.")
-
-    if vector_store is None:
-        raise ValueError("Vector store is not available.")
-
-    try:
-        # ------------------------------------------------------------
-        # Pandas
-        # ------------------------------------------------------------
-
-        pandas_query = _build_pandas_query(
-            user_query=user_query,
-            schema=state.get("schema", {}),
-        )
-
-        pandas_result = execute_pandas_query(
-            dataframe=dataframe,
-            query=pandas_query,
-        )
-
-        # ------------------------------------------------------------
-        # RAG
-        # ------------------------------------------------------------
-
-        rag_result = execute_rag_query(
-            vector_store=vector_store,
-            query=user_query,
-        )
-
-        logger.info("DATA pipeline completed successfully.")
-
-        return {
-            "pandas_result": pandas_result,
-            "rag_result": rag_result,
-        }
-
-    except Exception:
-        logger.exception("DATA pipeline failed.")
-        raise
-
-
-def _build_pandas_query(
-    user_query: str,
-    schema: dict[str, Any],
-) -> str:
-    return generate_pandas_query(
-        user_query=user_query,
-        schema=schema,
-    )
-
-def _route_after_planner(state: AgentState) -> str:
-    """
-    Decide which graph node should run after intent planning.
-    """
-
-    if state.get("intent") == "DATA":
-        return "data_tools"
-
-    return "response"
-
-
-def build_student_agent_graph():
-    """
-    Build and compile the Student Data Agent LangGraph.
+    The LLM decides whether to:
+    - answer directly,
+    - call Pandas,
+    - call RAG.
     """
 
     logger.info("Building Student Data Agent graph.")
 
+    # ------------------------------------------------------------
+    # Create tools once
+    # ------------------------------------------------------------
+
+    pandas_tool = create_pandas_tool(dataframe)
+    rag_tool = create_rag_tool(vector_store)
+
+    tools = [
+        pandas_tool,
+        rag_tool,
+    ]
+
+    # Bind tools to the LLM once.
+    tool_llm = llm.bind_tools(tools)
+
+    # ------------------------------------------------------------
+    # Build system prompt with current dataset metadata
+    # ------------------------------------------------------------
+
+    system_prompt = TOOL_CALLING_SYSTEM_PROMPT.format(
+        schema=schema,
+    )
+
+    # ------------------------------------------------------------
+    # LLM node
+    # ------------------------------------------------------------
+
+    def call_llm(state: AgentState) -> dict:
+        """
+        Call the LLM with the current dataset schema
+        and available tools.
+        """
+
+        logger.info("Calling main LLM.")
+
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            *state["messages"],
+        ]
+
+        response = tool_llm.invoke(messages)
+
+        logger.info(
+            "LLM completed | tool_calls=%d",
+            len(getattr(response, "tool_calls", [])),
+        )
+
+        return {
+            "messages": [response],
+        }
+
+    # ------------------------------------------------------------
+    # Tool node
+    # ------------------------------------------------------------
+
+    tool_node = ToolNode(tools)
+
+    # ------------------------------------------------------------
+    # Routing
+    # ------------------------------------------------------------
+
+    def route_after_llm(state: AgentState) -> str:
+        """
+        Route to tools only when the LLM requests a tool.
+        Otherwise finish.
+        """
+
+        last_message = state["messages"][-1]
+
+        if getattr(last_message, "tool_calls", None):
+            return "tools"
+
+        return "end"
+
+    # ------------------------------------------------------------
+    # Graph
+    # ------------------------------------------------------------
+
     graph = StateGraph(AgentState)
 
-    # Nodes
-    graph.add_node("planner", plan_intent)
-    graph.add_node("data_tools", _run_data_tools)
-    graph.add_node("response", generate_response)
+    graph.add_node("llm", call_llm)
+    graph.add_node("tools", tool_node)
 
-    # Entry
-    graph.add_edge(START, "planner")
+    graph.add_edge(START, "llm")
 
-    # Conditional routing
     graph.add_conditional_edges(
-        "planner",
-        _route_after_planner,
+        "llm",
+        route_after_llm,
         {
-            "data_tools": "data_tools",
-            "response": "response",
+            "tools": "tools",
+            "end": END,
         },
     )
 
-    # Final response
-    graph.add_edge("data_tools", "response")
-    graph.add_edge("response", END)
+    # Tool result → LLM
+    graph.add_edge("tools", "llm")
 
     compiled_graph = graph.compile()
 
-    logger.info("Student Data Agent graph built successfully.")
+    logger.info(
+        "Student Data Agent graph built successfully."
+    )
 
     return compiled_graph
 
@@ -131,27 +142,38 @@ def build_student_agent_graph():
 def run_agent_query(
     graph,
     user_query: str,
-    dataframe,
-    schema,
-    vector_store,
 ) -> str:
     """
-    Run a user query through the agent graph.
+    Run a user query through the Student Data Agent.
     """
 
-    logger.info("Running agent query: %s", user_query)
+    logger.info(
+        "Running agent query: %s",
+        user_query,
+    )
 
-    initial_state: AgentState = {
-        "user_query": user_query,
-        "dataframe": dataframe,
-        "schema": schema,
-        "vector_store": vector_store,
-    }
+    result = graph.invoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": user_query,
+                }
+            ]
+        }
+    )
 
-    result = graph.invoke(initial_state)
+    messages = result.get("messages", [])
 
-    final_answer = result.get("final_answer", "")
+    if not messages:
+        return ""
 
-    logger.info("Agent query completed successfully.")
+    final_message = messages[-1]
+
+    final_answer = final_message.content
+
+    logger.info(
+        "Agent query completed successfully."
+    )
 
     return final_answer

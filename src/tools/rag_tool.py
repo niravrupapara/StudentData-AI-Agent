@@ -2,6 +2,7 @@
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+from langchain_core.tools import tool
 
 from config.settings import settings
 from src.rag.retriever import retrieve_documents
@@ -18,14 +19,6 @@ def execute_rag_query(
 ) -> list[Document]:
     """
     Retrieve relevant documents for a user query.
-
-    Args:
-        vector_store: FAISS vector store.
-        query: User's natural-language query.
-        top_k: Number of documents to retrieve.
-
-    Returns:
-        List of relevant documents.
     """
 
     if vector_store is None:
@@ -38,7 +31,7 @@ def execute_rag_query(
     k = top_k or settings.TOP_K
 
     logger.info(
-        "Executing RAG tool | top_k=%d",
+        "Executing RAG query | top_k=%d",
         k,
     )
 
@@ -50,12 +43,36 @@ def execute_rag_query(
         )
 
         logger.info(
-            "RAG tool completed | documents=%d",
+            "RAG query completed | documents=%d",
             len(documents),
         )
 
         return documents
 
     except Exception:
-        logger.exception("RAG tool execution failed.")
+        logger.exception("RAG query execution failed.")
         raise
+
+
+def create_rag_tool(vector_store: FAISS):
+    """
+    Create a RAG tool bound to the application's vector store.
+    """
+
+    @tool
+    def rag_tool(query: str) -> list[Document]:
+        """
+        Retrieve relevant information from the student knowledge base.
+
+        Use this tool when the user's question requires
+        information from documents or contextual knowledge.
+
+        The query should be a clear natural-language search query.
+        """
+
+        return execute_rag_query(
+            vector_store=vector_store,
+            query=query,
+        )
+
+    return rag_tool

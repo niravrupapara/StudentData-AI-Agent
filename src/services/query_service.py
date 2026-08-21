@@ -71,9 +71,6 @@ def prepare_dataset(
 def process_query(
     graph,
     user_query: str,
-    dataframe: pd.DataFrame,
-    schema: dict,
-    vector_store,
 ) -> str:
     """
     Process a user query through the agent graph.
@@ -84,7 +81,4 @@ def process_query(
     return run_agent_query(
         graph=graph,
         user_query=user_query,
-        dataframe=dataframe,
-        schema=schema,
-        vector_store=vector_store,
     )

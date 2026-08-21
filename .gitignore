@@ -227,6 +227,10 @@ storage/indexes/
 *.faiss
 *.pkl
 
+# Local offline model weights (downloaded via download_model.py)
+models/*
+!models/.gitkeep
+
 # Uploaded student datasets & processed files
 data/uploads/*
 data/processed/*

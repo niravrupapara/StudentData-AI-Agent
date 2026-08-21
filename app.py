@@ -6,6 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.agent.graph import build_student_agent_graph
+from src.data import schema
 from src.services.query_service import prepare_dataset, process_query
 from src.utils.logger import get_logger
 
@@ -29,14 +30,16 @@ st.set_page_config(
 # -------------------------------------------------------------------
 
 @st.cache_resource
-def load_agent_graph():
-    """
-    Build the LangGraph agent once and reuse it.
-    """
-
-    logger.info("Initializing Student Data Agent graph.")
-
-    return build_student_agent_graph()
+def load_agent_graph(
+    _dataframe,
+    schema,
+    _vector_store,
+):
+    return build_student_agent_graph(
+        dataframe=_dataframe,
+        schema=schema,
+        vector_store=_vector_store,
+    )
 
 
 # -------------------------------------------------------------------
@@ -101,6 +104,8 @@ def main():
             dataframe, schema, vector_store = prepare_dataset(
                 file_path=file_path,
             )
+            logger.info("Dataset columns: %s", list(dataframe.columns))
+            logger.info("Dataset schema: %s", schema)   
 
         # -----------------------------------------------------------
         # Dataset information
@@ -123,7 +128,11 @@ def main():
         # Agent
         # -----------------------------------------------------------
 
-        graph = load_agent_graph()
+        graph = load_agent_graph(
+            _dataframe=dataframe,
+            schema=schema,
+            _vector_store=vector_store,
+        )
 
         # -----------------------------------------------------------
         # User Query
@@ -152,9 +161,6 @@ def main():
                     answer = process_query(
                         graph=graph,
                         user_query=user_query,
-                        dataframe=dataframe,
-                        schema=schema,
-                        vector_store=vector_store,
                     )
 
                 st.write(answer)
