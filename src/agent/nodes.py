@@ -10,16 +10,9 @@ logger = get_logger(__name__)
 
 
 def execute_pandas_agent(state: AgentState, pandas_agent) -> dict:
-    """
-    Execute the Pandas Agent using the latest user message from state.
 
-    Args:
-        state: Current AgentState containing message history.
-        pandas_agent: Initialized LangChain Pandas Agent.
+    """Execute the Pandas Agent using the latest user message from state."""
 
-    Returns:
-        State update dictionary containing the new AIMessage.
-    """
     last_message = state["messages"][-1]
     user_query = (
         last_message.content

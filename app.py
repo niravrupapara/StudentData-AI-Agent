@@ -1,5 +1,3 @@
-# app.py
-
 import uuid
 import streamlit as st
 
@@ -11,86 +9,207 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
 st.set_page_config(
     page_title="Student Data AI Agent",
     page_icon="🤖",
     layout="wide",
 )
 
-# -----------------------------
-# 1. Session State Initialization
-# -----------------------------
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+
 if "graph" not in st.session_state:
     st.session_state.graph = None
+
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
+
 if "current_file" not in st.session_state:
     st.session_state.current_file = None
 
-# -----------------------------
-# 2. Sidebar (CSV Upload & Stats)
-# -----------------------------
+if "df_shape" not in st.session_state:
+    st.session_state.df_shape = None
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
 with st.sidebar:
+
     st.header("📁 Upload Dataset")
-    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV file",
+        type=["csv"]
+    )
 
     if uploaded_file is not None:
-        # Rebuild agent only when a new/different CSV is uploaded
+
+        # Only rebuild graph for a new CSV
         if st.session_state.current_file != uploaded_file.name:
+
             try:
+                # Load CSV
                 df = load_csv(uploaded_file)
+
+                # Build LangGraph
                 st.session_state.graph = build_agent_graph(df)
+
+                # New dataset = new conversation
+                st.session_state.thread_id = str(uuid.uuid4())
+
                 st.session_state.current_file = uploaded_file.name
-                st.session_state.session_id = str(uuid.uuid4())
-                st.session_state.messages = []
-                st.session_state.df_shape = (len(df), len(df.columns))
-                logger.info("New CSV loaded: %s", uploaded_file.name)
+
+                st.session_state.df_shape = (
+                    len(df),
+                    len(df.columns)
+                )
+
+                logger.info(
+                    "CSV loaded | file=%s | thread_id=%s",
+                    uploaded_file.name,
+                    st.session_state.thread_id
+                )
+
             except Exception as e:
-                logger.exception("Failed to load CSV.")
-                st.error(f"Error loading CSV: {e}")
 
-        # Show dataset stats
+                logger.exception(
+                    "Failed to load CSV"
+                )
+
+                st.error(
+                    f"Error loading CSV: {e}"
+                )
+
+        # Dataset information
         if st.session_state.graph is not None:
-            rows, cols = st.session_state.df_shape
-            st.success("CSV loaded successfully!")
-            st.caption(f"📊 **Rows:** {rows} | **Columns:** {cols}")
 
-# -----------------------------
-# 3. Main Chat Interface
-# -----------------------------
+            rows, cols = st.session_state.df_shape
+
+            st.success("CSV loaded successfully!")
+
+            st.caption(
+                f"📊 Rows: {rows} | Columns: {cols}"
+            )
+
+
+# ============================================================
+# MAIN UI
+# ============================================================
+
 st.title("🤖 Student Data AI Agent")
 
-if st.session_state.graph is None:
-    st.info("👈 Please upload a CSV file from the sidebar to start chatting.")
-else:
-    # Display message history
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
 
-    # Chat Input
-    if question := st.chat_input("Ask a question about your data..."):
-        # 1. Display user query
-        st.session_state.messages.append({"role": "user", "content": question})
+if st.session_state.graph is None:
+
+    st.info(
+        "👈 Upload a CSV file from the sidebar to start chatting."
+    )
+
+else:
+
+    # ========================================================
+    # LANGGRAPH CONFIG
+    # ========================================================
+
+    config = {
+        "configurable": {
+            "thread_id": st.session_state.thread_id
+        }
+    }
+
+
+    # ========================================================
+    # RESTORE CHAT HISTORY FROM LANGGRAPH
+    # ========================================================
+
+    try:
+
+        state_snapshot = (
+            st.session_state.graph.get_state(config)
+        )
+
+        messages = state_snapshot.values.get(
+            "messages",
+            []
+        )
+
+        for message in messages:
+
+            if message.type == "human":
+
+                with st.chat_message("user"):
+                    st.write(message.content)
+
+            elif message.type == "ai":
+
+                with st.chat_message("assistant"):
+                    st.write(message.content)
+
+    except Exception as e:
+
+        logger.exception(
+            "Failed to restore LangGraph state"
+        )
+
+        st.warning(
+            f"Unable to restore conversation: {e}"
+        )
+
+
+    # ========================================================
+    # CHAT INPUT
+    # ========================================================
+
+    question = st.chat_input(
+        "Ask a question about your data..."
+    )
+
+
+    if question:
+
+        # ----------------------------------------------------
+        # User message
+        # ----------------------------------------------------
+
         with st.chat_message("user"):
             st.write(question)
 
-        # 2. Generate assistant response
+
+        # ----------------------------------------------------
+        # LangGraph execution
+        # ----------------------------------------------------
+
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing your data..."):
+
+            with st.spinner(
+                "Analyzing your data..."
+            ):
+
                 try:
+
                     answer = ask_agent(
-                        st.session_state.graph,
-                        question,
-                        thread_id=st.session_state.session_id,
+                        graph=st.session_state.graph,
+                        question=question,
+                        thread_id=st.session_state.thread_id
                     )
+
                     st.write(answer)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": answer}
-                    )
+
                 except Exception as e:
-                    logger.exception("Error answering user question.")
-                    st.error(f"Something went wrong: {e}")
-
+
+                    logger.exception(
+                        "Error executing LangGraph"
+                    )
+
+                    st.error(
+                        f"Something went wrong: {e}"
+                    )
