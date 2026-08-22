@@ -2,85 +2,71 @@ from pathlib import Path
 
 
 PROJECT_STRUCTURE = {
-    "config": [
-        "__init__.py",
-        "settings.py",
-    ],
-    "src": [
-        "__init__.py",
-    ],
-    "src/agent": [
-        "__init__.py",
-        "graph.py",
-        "state.py",
-        "planner.py",
-        "response_generator.py",
-    ],
-    "src/tools": [
-        "__init__.py",
-        "pandas_tool.py",
-        "rag_tool.py",
-    ],
-    "src/rag": [
-        "__init__.py",
-        "document_builder.py",
-        "embedder.py",
-        "vector_store.py",
-        "retriever.py",
-    ],
-    "src/data": [
-        "__init__.py",
-        "loader.py",
-        "schema.py",
-    ],
-    "src/llm": [
-        "__init__.py",
-        "client.py",
-        "prompts.py",
-    ],
-    "src/services": [
-        "__init__.py",
-        "query_service.py",
-    ],
-    "src/utils": [
-        "__init__.py",
-        "logger.py",
-        "exceptions.py",
-    ],
-    "data/uploads": [],
-    "data/processed": [],
-    "storage/indexes": [],
-    "logs": [],
+    "app.py": None,
+    ".env": None,
+    "requirements.txt": None,
+
+    "config": {
+        "__init__.py": None,
+        "settings.py": None,
+    },
+
+    "data": {
+        ".gitkeep": None,
+    },
+
+    "logs": {
+        ".gitkeep": None,
+    },
+
+    "src": {
+        "__init__.py": None,
+        "data_loader.py": None,
+        "llm.py": None,
+
+        "agent": {
+            "__init__.py": None,
+            "state.py": None,
+            "pandas_agent.py": None,
+            "nodes.py": None,
+            "graph.py": None,
+            "runner.py": None,
+        },
+
+        "utils": {
+            "__init__.py": None,
+            "logger.py": None,
+        },
+    },
+
+    "tests": {
+        "__init__.py": None,
+        "test_agent.py": None,
+    },
 }
 
 
-ROOT_FILES = [
-    "app.py",
-    "requirements.txt",
-    ".env",
-    ".gitignore",
-]
+def create_structure(base_path="."):
+    base = Path(base_path)
 
+    def create_items(current_path, structure):
+        for name, content in structure.items():
+            path = current_path / name
 
-def create_project_structure():
-    root = Path.cwd()
+            if isinstance(content, dict):
+                path.mkdir(parents=True, exist_ok=True)
+                create_items(path, content)
+            else:
+                if not path.exists():
+                    path.touch()
+                    print(f"Created: {path}")
+                else:
+                    print(f"Exists:  {path}")
 
-    # Create folders and Python files
-    for folder, files in PROJECT_STRUCTURE.items():
-        folder_path = root / folder
-        folder_path.mkdir(parents=True, exist_ok=True)
+    create_items(base, PROJECT_STRUCTURE)
 
-        for file_name in files:
-            file_path = folder_path / file_name
-            file_path.touch(exist_ok=True)
-
-    # Create root-level files
-    for file_name in ROOT_FILES:
-        file_path = root / file_name
-        file_path.touch(exist_ok=True)
-
-    print("Project structure created successfully!")
+    print("\nProject structure created successfully!")
 
 
 if __name__ == "__main__":
-    create_project_structure()
+    create_structure()

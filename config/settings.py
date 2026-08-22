@@ -18,14 +18,10 @@ class Settings:
         "mistral-small-latest",
     )
 
-    EMBEDDING_MODEL: str = "./models/all-MiniLM-L6-v2"
-
-    TOP_K: int = int(os.getenv("TOP_K", "5"))
-
     LOG_LEVEL: str = os.getenv(
         "LOG_LEVEL",
         "INFO",
     )
 
 
-settings = Settings()
+settings = Settings()
