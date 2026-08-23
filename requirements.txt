@@ -6,4 +6,5 @@ langchain-experimental
 langgraph
 pandas
 python-dotenv
+tabulate
 streamlit
