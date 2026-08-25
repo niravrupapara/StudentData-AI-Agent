@@ -4,11 +4,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from src.agent.graph import build_agent_graph
-from src.agent.runner import ask_agent
-from src.data_loader import load_csv
+from src.agent.graph import ask_agent, build_agent_graph
+from src.ingestion.csv_loader import load_csv
 from src.utils.logger import get_logger
-
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -28,7 +26,7 @@ def run_tests():
         return
 
     print("=" * 70)
-    print("1. Loading CSV...")
+    print("1. Validating CSV...")
     print("=" * 70)
 
     df = load_csv(csv_path)
@@ -37,10 +35,10 @@ def run_tests():
     print("Rows:", len(df))
 
     print("\n" + "=" * 70)
-    print("2. Initializing LangGraph Agent...")
+    print("2. Initializing LangGraph Multi-Agent System...")
     print("=" * 70)
 
-    graph = build_agent_graph(df)
+    graph = build_agent_graph()
 
     questions = [
         "How many students are from each branch?",
@@ -48,7 +46,7 @@ def run_tests():
     ]
 
     print("\n" + "=" * 70)
-    print("3. Executing Test Queries with Chat Memory...")
+    print("3. Executing Test Queries with Multi-Agent Memory...")
     print("=" * 70)
 
     for question in questions:
@@ -57,7 +55,12 @@ def run_tests():
         print("-" * 50)
 
         try:
-            answer = ask_agent(graph, question, thread_id="cli_test_session")
+            answer = ask_agent(
+                graph=graph,
+                question=question,
+                files=[str(csv_path)],
+                thread_id="cli_test_session",
+            )
             print(f"ANSWER:\n{answer}")
         except Exception as e:
             print(f"ERROR: {e}")

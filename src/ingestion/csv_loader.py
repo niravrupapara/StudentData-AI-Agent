@@ -1,30 +1,19 @@
-# src/data_loader.py
-
+import io
 from pathlib import Path
 from typing import Union
-import io
+
 import pandas as pd
 
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
+FileSource = Union[str, Path, io.BytesIO]
 
-def load_csv(file_source: Union[str, Path, io.BytesIO]) -> pd.DataFrame:
-    """
-    Load a CSV file from a file path or file-like buffer into a DataFrame.
 
-    Args:
-        file_source: File path (str/Path) or file-like buffer (e.g. from Streamlit).
-
-    Returns:
-        Loaded pandas DataFrame.
-
-    Raises:
-        ValueError: If the CSV is empty or cannot be read.
-    """
-    logger.info("Loading CSV data source...")
+def load_csv(file_source: FileSource) -> pd.DataFrame:
+    """Load and validate a CSV data source into a Pandas DataFrame."""
+    logger.info("Loading CSV data source: %s", file_source)
 
     try:
         df = pd.read_csv(file_source)
@@ -38,9 +27,8 @@ def load_csv(file_source: Union[str, Path, io.BytesIO]) -> pd.DataFrame:
             len(df),
             len(df.columns),
         )
-
         return df
 
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to load CSV file.")
-        raise
+        raise ValueError(f"Error loading CSV file: {e}") from e

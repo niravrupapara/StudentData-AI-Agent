@@ -25,7 +25,7 @@ def get_llm() -> ChatMistralAI:
     try:
         llm = ChatMistralAI(
             model=settings.LLM_MODEL,
-            temperature=0,
+            temperature=settings.LLM_TEMPERATURE,
             api_key=settings.MISTRAL_API_KEY,
         )
 

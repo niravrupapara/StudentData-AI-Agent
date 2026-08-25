@@ -8,11 +8,20 @@ PROJECT_STRUCTURE = {
 
     "config": {
         "__init__.py": None,
+        "config.yaml": None,
         "settings.py": None,
     },
 
     "data": {
-        ".gitkeep": None,
+        "uploads": {
+            ".gitkeep": None,
+        },
+        "chroma_db": {
+            ".gitkeep": None,
+        },
+        "charts": {
+            ".gitkeep": None,
+        },
     },
 
     "logs": {
@@ -21,16 +30,27 @@ PROJECT_STRUCTURE = {
 
     "src": {
         "__init__.py": None,
-        "data_loader.py": None,
         "llm.py": None,
+
+        "ingestion": {
+            "__init__.py": None,
+            "csv_loader.py": None,
+            "excel_loader.py": None,
+            "pdf_loader.py": None,
+        },
 
         "agent": {
             "__init__.py": None,
             "state.py": None,
+            "supervisor.py": None,
+            "supervisor_tools.py": None,
+            "visualization_tool.py": None,
             "pandas_agent.py": None,
-            "nodes.py": None,
+            "csv_agent.py": None,
+            "excel_agent.py": None,
+            "pdf_retriever.py": None,
+            "pdf_agent.py": None,
             "graph.py": None,
-            "runner.py": None,
         },
 
         "utils": {
