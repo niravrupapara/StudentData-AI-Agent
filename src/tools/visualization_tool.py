@@ -18,8 +18,8 @@ CHARTS_DIR = Path("data/charts")
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@tool
-def generate_chart(python_code: str) -> str:
+@tool(response_format="content_and_artifact")
+def generate_chart(python_code: str) -> tuple[str, dict]:
     """Execute Python matplotlib/seaborn code to generate and save a chart visualization to data/charts/.
 
     The code should assume standard libraries (plt, sns, pd, np) are available.
@@ -42,11 +42,28 @@ def generate_chart(python_code: str) -> str:
         cleaned_code = cleaned_code[:-3]
     cleaned_code = cleaned_code.strip()
 
-    # Custom savefig wrapper to ensure any savefig call writes to CHARTS_DIR
+    original_savefig = plt.savefig
+    original_show = plt.show
+    original_close = plt.close
+    is_saved = False
+
     def safe_savefig(*args, **kwargs):
+        nonlocal is_saved
+        is_saved = True
         return original_savefig(chart_path, bbox_inches="tight", dpi=150)
 
-    original_savefig = plt.savefig
+    def safe_show(*args, **kwargs):
+        nonlocal is_saved
+        if not is_saved:
+            original_savefig(chart_path, bbox_inches="tight", dpi=150)
+            is_saved = True
+
+    def safe_close(*args, **kwargs):
+        nonlocal is_saved
+        if not is_saved:
+            original_savefig(chart_path, bbox_inches="tight", dpi=150)
+            is_saved = True
+        return original_close(*args, **kwargs)
 
     exec_globals = {
         "plt": plt,
@@ -60,24 +77,41 @@ def generate_chart(python_code: str) -> str:
         plt.clf()
         plt.close("all")
 
-        # Temporarily redirect plt.savefig so any script call saves to data/charts/
+        # Temporarily redirect matplotlib functions so any call safely writes to chart_path
         plt.savefig = safe_savefig
+        plt.show = safe_show
+        plt.close = safe_close
 
         # Execute plotting code
         exec(cleaned_code, exec_globals)
 
-        # Restore and save figure if not saved during exec
-        plt.savefig = original_savefig
-        plt.savefig(chart_path, bbox_inches="tight", dpi=150)
+        # If not saved during exec (e.g. script didn't call show/savefig/close), save the active figure
+        if not is_saved:
+            original_savefig(chart_path, bbox_inches="tight", dpi=150)
+            is_saved = True
 
         logger.info("Chart successfully saved | path=%s", chart_path)
-        return f"CHART_SAVED: {chart_path.as_posix()}"
+        return (
+            "Created chart visualization successfully.",
+            {
+                "type": "image",
+                "path": chart_path.as_posix(),
+            },
+        )
 
     except Exception as e:
         logger.exception("Error executing chart generation.")
-        return f"ERROR: Failed to generate chart: {e}"
+        return (
+            f"ERROR: Failed to generate chart: {e}",
+            {
+                "type": "error",
+                "error": str(e),
+            },
+        )
 
     finally:
         plt.savefig = original_savefig
+        plt.show = original_show
+        plt.close = original_close
         plt.clf()
-        plt.close("all")
+        original_close("all")

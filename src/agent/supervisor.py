@@ -31,6 +31,6 @@ Workflow Rules:
 3. When the user requests a chart or visual plot:
    - Step 1: Call `analyze_data` to calculate and extract the numerical values/aggregates.
    - Step 2: Call `generate_chart` passing valid Python matplotlib code containing the extracted data.
-   - Include the generated chart path in your final response.
+   - Present and explain the key findings in your final response.
 4. Always provide clear, accurate, and concise final responses.
 """

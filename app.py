@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 import uuid
 
 import streamlit as st
@@ -43,29 +42,31 @@ if "file_paths" not in st.session_state:
 # HELPER - RENDER MESSAGE & CHARTS
 # ============================================================
 
-def render_assistant_message(content: str):
-    """Display assistant response and auto-render any generated chart image."""
+def render_assistant_message(content: str, artifacts: list[dict] | None = None):
+    """Display assistant response and render any generated chart artifacts."""
     st.write(content)
 
-    # Detect any .png image file references in text
-    chart_matches = re.findall(r"[\w\\/.-]+\.png", content)
-    rendered = set()
-
-    for match in chart_matches:
-        candidates = [
-            Path(match),
-            Path("data/charts") / Path(match).name,
-            Path("data/charts") / match,
-        ]
-        for p in candidates:
-            if p.exists() and str(p.resolve()) not in rendered:
-                st.image(
-                    str(p),
-                    caption="📊 Generated Visualization",
-                    width="stretch",
-                )
-                rendered.add(str(p.resolve()))
-                break
+    if artifacts:
+        rendered = set()
+        for art in artifacts:
+            if isinstance(art, dict) and art.get("type") == "image":
+                path_val = art.get("path")
+                if path_val:
+                    candidates = [
+                        Path(path_val),
+                        Path(path_val).resolve(),
+                        Path("data/charts") / Path(path_val).name,
+                    ]
+                    for p in candidates:
+                        if p.exists() and str(p.resolve()) not in rendered:
+                            logger.info("Rendering chart image | path=%s", p)
+                            st.image(
+                                str(p),
+                                caption="📊 Generated Visualization",
+                                width="stretch",
+                            )
+                            rendered.add(str(p.resolve()))
+                            break
 
 
 # ============================================================
@@ -134,14 +135,22 @@ else:
         state = st.session_state.graph.get_state(config)
         messages = state.values.get("messages", [])
 
+        pending_artifacts = []
         for message in messages:
             if message.type == "human":
+                pending_artifacts = []
                 with st.chat_message("user"):
                     st.write(message.content)
 
+            elif message.type == "tool":
+                artifact = getattr(message, "artifact", None)
+                if isinstance(artifact, dict) and artifact.get("type") == "image":
+                    pending_artifacts.append(artifact)
+
             elif message.type == "ai" and message.content:
                 with st.chat_message("assistant"):
-                    render_assistant_message(message.content)
+                    render_assistant_message(message.content, artifacts=pending_artifacts)
+                pending_artifacts = []
 
     except Exception as exc:
         logger.exception("Failed to load conversation: %s", exc)
@@ -160,14 +169,17 @@ else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    answer = ask_agent(
+                    response = ask_agent(
                         graph=st.session_state.graph,
                         question=question,
                         files=st.session_state.file_paths,
                         thread_id=st.session_state.thread_id,
                     )
 
-                    render_assistant_message(answer)
+                    render_assistant_message(
+                        content=response["content"],
+                        artifacts=response.get("artifacts", []),
+                    )
 
                 except Exception as exc:
                     logger.exception("Agent execution failed.")

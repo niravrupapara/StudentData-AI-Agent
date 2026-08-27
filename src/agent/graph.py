@@ -32,7 +32,7 @@ def ask_agent(
     question: str,
     files: list[str] | None = None,
     thread_id: str = "default_session",
-) -> str:
+) -> dict:
     """Submit a question to the ReAct agent with conversation thread and file context."""
     logger.info("ask_agent invoked | thread_id=%s | question=%s", thread_id, question)
 
@@ -49,5 +49,23 @@ def ask_agent(
         config=config,
     )
 
-    last_message = result["messages"][-1]
-    return getattr(last_message, "content", str(last_message))
+    messages = result["messages"]
+    last_message = messages[-1]
+    content = getattr(last_message, "content", str(last_message))
+
+    # Extract image artifacts from ToolMessages produced in this turn
+    artifacts = []
+    last_human_idx = -1
+    for i in range(len(messages) - 1, -1, -1):
+        if getattr(messages[i], "type", None) == "human":
+            last_human_idx = i
+            break
+
+    turn_messages = messages[last_human_idx:] if last_human_idx != -1 else messages
+    for msg in turn_messages:
+        artifact = getattr(msg, "artifact", None)
+        if isinstance(artifact, dict) and artifact.get("type") == "image":
+            artifacts.append(artifact)
+
+    logger.info("ask_agent execution complete | artifacts_count=%d | artifacts=%s", len(artifacts), artifacts)
+    return {"content": content, "artifacts": artifacts}
