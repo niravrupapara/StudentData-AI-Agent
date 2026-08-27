@@ -226,6 +226,20 @@ storage/
 storage/indexes/
 *.faiss
 *.pkl
+*.sqlite3
+data/chroma_db/
+data/faiss_index/
+data/vector_store/*
+!data/vector_store/.gitkeep
+
+# Generated charts and visualization outputs
+data/charts/*
+!data/charts/.gitkeep
+data/outputs/*
+!data/outputs/.gitkeep
+*.png
+*.jpg
+*.jpeg
 
 # Local offline model weights (downloaded via download_model.py)
 models/*
@@ -241,6 +255,9 @@ data/processed/*
 logs/*
 !logs/.gitkeep
 
+# Temporary / Scratch Test Scripts
+test.py
+
 # Operating System Files
 .DS_Store
 Thumbs.db
@@ -251,6 +268,7 @@ desktop.ini
 .idea/
 
 # Environment files
+.env
 .env*.local
 .env.*
 !.env.example

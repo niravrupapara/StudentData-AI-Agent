@@ -4,8 +4,8 @@ from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict):
-    """Conversation state for the multi-agent system."""
+    """Conversation and execution state for the LangGraph agent workflow."""
 
     messages: Annotated[list[AnyMessage], add_messages]
     files: list[str]
-    iteration_count: int
+    iteration_count: int

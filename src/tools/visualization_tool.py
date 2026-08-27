@@ -1,9 +1,8 @@
-import os
 from pathlib import Path
 import uuid
 import matplotlib
 
-# Set non-interactive backend for headless / server execution
+# Non-interactive backend for server/Streamlit execution
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,24 +14,25 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-CHARTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "charts"
+CHARTS_DIR = Path("data/charts")
+CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @tool
 def generate_chart(python_code: str) -> str:
-    """Execute Python matplotlib/seaborn code to generate and save a chart visualization.
-    
+    """Execute Python matplotlib/seaborn code to generate and save a chart visualization to data/charts/.
+
     The code should assume standard libraries (plt, sns, pd, np) are available.
-    Do NOT call plt.show() inside the code. The tool will save and close the figure automatically.
+    All charts will be automatically saved into data/charts/.
     """
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
     chart_id = uuid.uuid4().hex[:8]
     chart_filename = f"chart_{chart_id}.png"
     chart_path = CHARTS_DIR / chart_filename
 
-    logger.info("Executing visualization code | chart_path=%s", chart_path)
+    logger.info("Executing chart generation code | target_path=%s", chart_path)
 
-    # Clean code formatting if enclosed in backticks
+    # Clean markdown formatting if code is enclosed in backticks
     cleaned_code = python_code.strip()
     if cleaned_code.startswith("```python"):
         cleaned_code = cleaned_code[9:]
@@ -42,7 +42,12 @@ def generate_chart(python_code: str) -> str:
         cleaned_code = cleaned_code[:-3]
     cleaned_code = cleaned_code.strip()
 
-    # Execution namespace
+    # Custom savefig wrapper to ensure any savefig call writes to CHARTS_DIR
+    def safe_savefig(*args, **kwargs):
+        return original_savefig(chart_path, bbox_inches="tight", dpi=150)
+
+    original_savefig = plt.savefig
+
     exec_globals = {
         "plt": plt,
         "sns": sns,
@@ -52,27 +57,27 @@ def generate_chart(python_code: str) -> str:
     }
 
     try:
-        # Reset any lingering figures
         plt.clf()
         plt.close("all")
+
+        # Temporarily redirect plt.savefig so any script call saves to data/charts/
+        plt.savefig = safe_savefig
 
         # Execute plotting code
         exec(cleaned_code, exec_globals)
 
-        # Save generated figure
-        plt.savefig(
-            chart_path,
-            bbox_inches="tight",
-            dpi=150,
-        )
-        logger.info("Chart successfully saved | path=%s", chart_path)
+        # Restore and save figure if not saved during exec
+        plt.savefig = original_savefig
+        plt.savefig(chart_path, bbox_inches="tight", dpi=150)
 
+        logger.info("Chart successfully saved | path=%s", chart_path)
         return f"CHART_SAVED: {chart_path.as_posix()}"
 
     except Exception as e:
-        logger.exception("Failed to execute visualization code.")
+        logger.exception("Error executing chart generation.")
         return f"ERROR: Failed to generate chart: {e}"
 
     finally:
+        plt.savefig = original_savefig
         plt.clf()
         plt.close("all")

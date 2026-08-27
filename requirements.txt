@@ -11,9 +11,8 @@ langchain-community
 langchain-experimental
 langchain-mistralai
 langgraph
-langchain-chroma
-chromadb
 langchain-huggingface
 sentence-transformers
+faiss-cpu
 matplotlib
 seaborn

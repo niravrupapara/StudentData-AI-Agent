@@ -1,18 +1,21 @@
 from pathlib import Path
+import re
 import uuid
+
 import streamlit as st
 
 from src.agent.graph import ask_agent, build_agent_graph
-from src.agent.pdf_retriever import get_or_create_pdf_retriever
-from src.ingestion.csv_loader import load_csv
-from src.ingestion.excel_loader import load_excel
-from src.ingestion.pdf_loader import load_pdf
+from src.tools.pdf_tool import get_or_create_faiss_retriever
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+UPLOAD_DIR = Path("data/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
 # ============================================================
-# PAGE CONFIG
+# PAGE
 # ============================================================
 
 st.set_page_config(
@@ -21,11 +24,12 @@ st.set_page_config(
     layout="wide",
 )
 
+
 # ============================================================
-# SESSION STATE
+# SESSION
 # ============================================================
 
-if "graph" not in st.session_state or st.session_state.graph is None:
+if "graph" not in st.session_state:
     st.session_state.graph = build_agent_graph()
 
 if "thread_id" not in st.session_state:
@@ -34,203 +38,127 @@ if "thread_id" not in st.session_state:
 if "file_paths" not in st.session_state:
     st.session_state.file_paths = []
 
-if "file_metadata" not in st.session_state:
-    st.session_state.file_metadata = {}
+
+# ============================================================
+# HELPER - RENDER MESSAGE & CHARTS
+# ============================================================
+
+def render_assistant_message(content: str):
+    """Display assistant response and auto-render any generated chart image."""
+    st.write(content)
+
+    # Detect any .png image file references in text
+    chart_matches = re.findall(r"[\w\\/.-]+\.png", content)
+    rendered = set()
+
+    for match in chart_matches:
+        candidates = [
+            Path(match),
+            Path("data/charts") / Path(match).name,
+            Path("data/charts") / match,
+        ]
+        for p in candidates:
+            if p.exists() and str(p.resolve()) not in rendered:
+                st.image(
+                    str(p),
+                    caption="📊 Generated Visualization",
+                    width="stretch",
+                )
+                rendered.add(str(p.resolve()))
+                break
 
 
 # ============================================================
-# SIDEBAR
+# SIDEBAR - FILE UPLOAD
 # ============================================================
 
 with st.sidebar:
-    st.header("📁 Upload Documents & Data")
+
+    st.header("📁 Upload Files")
 
     uploaded_files = st.file_uploader(
-        "Upload CSV, Excel, or PDF files",
+        "Upload CSV, Excel or PDF",
         type=["csv", "xlsx", "xls", "pdf"],
         accept_multiple_files=True,
     )
 
-    upload_dir = Path("data/uploads")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
     if uploaded_files:
-        current_file_names = [f.name for f in uploaded_files]
-        new_file_paths = []
+
+        file_paths = []
 
         for uploaded_file in uploaded_files:
-            file_path = upload_dir / uploaded_file.name
-            new_file_paths.append(str(file_path.resolve()))
 
-            # Save file to disk
+            file_path = UPLOAD_DIR / uploaded_file.name
+
+            # Save file
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            # Parse and cache metadata if new file
-            if uploaded_file.name not in st.session_state.file_metadata:
-                try:
-                    ext = file_path.suffix.lower()
-                    if ext == ".csv":
-                        df = load_csv(file_path)
-                        st.session_state.file_metadata[uploaded_file.name] = {
-                            "type": "CSV",
-                            "info": f"📊 {len(df)} rows | {len(df.columns)} cols",
-                        }
-                    elif ext in [".xlsx", ".xls"]:
-                        sheets = load_excel(file_path)
-                        sheet_names = ", ".join(list(sheets.keys()))
-                        st.session_state.file_metadata[uploaded_file.name] = {
-                            "type": "Excel",
-                            "info": f"📈 {len(sheets)} sheet(s): {sheet_names}",
-                        }
-                    elif ext == ".pdf":
-                        # Pre-index vector store in storage upon upload
-                        get_or_create_pdf_retriever(file_path)
-                        text = load_pdf(file_path)
-                        st.session_state.file_metadata[uploaded_file.name] = {
-                            "type": "PDF",
-                            "info": f"📄 Document indexed ({len(text)} chars)",
-                        }
+            file_paths.append(str(file_path.resolve()))
 
-                    logger.info("Processed file upload: %s", uploaded_file.name)
+            # Pre-index PDF with FAISS on upload
+            if file_path.suffix.lower() == ".pdf":
+                get_or_create_faiss_retriever(file_path)
 
-                except Exception as e:
-                    logger.exception("Error processing file: %s", uploaded_file.name)
-                    st.session_state.file_metadata[uploaded_file.name] = {
-                        "type": "Error",
-                        "info": f"⚠️ {e}",
-                    }
+            logger.info("File uploaded: %s", uploaded_file.name)
 
-        st.session_state.file_paths = new_file_paths
+        st.session_state.file_paths = file_paths
+        st.success(f"{len(uploaded_files)} file(s) uploaded")
 
-        # Display file metadata in sidebar
-        st.success(f"{len(uploaded_files)} file(s) active!")
-        for name, meta in st.session_state.file_metadata.items():
-            if name in current_file_names:
-                with st.expander(f"{meta['type']}: {name}", expanded=False):
-                    st.caption(meta["info"])
+        for file in uploaded_files:
+            st.write(f"📄 {file.name}")
+
     else:
-        st.session_state.file_paths = []
-        st.session_state.file_metadata = {}
-
-
-import re
-
-# ============================================================
-# VISUALIZATION HELPER
-# ============================================================
-
-
-def render_assistant_message(content: str, tool_messages: list | None = None):
-    """Render assistant text response and automatically display any generated chart figures."""
-    chart_paths = []
-
-    # 1. Search for chart paths in the assistant's message content
-    matches = re.findall(
-        r"(?:data[\\/])?charts[\\/]chart_[a-zA-Z0-9_]+\.png",
-        content,
-    )
-    for match in matches:
-        p = Path(match)
-        if p.exists() and str(p) not in chart_paths:
-            chart_paths.append(str(p))
-
-    # 2. Search for chart paths in associated tool messages
-    if tool_messages:
-        for tm in tool_messages:
-            tm_matches = re.findall(
-                r"(?:data[\\/])?charts[\\/]chart_[a-zA-Z0-9_]+\.png",
-                getattr(tm, "content", ""),
-            )
-            for match in tm_matches:
-                p = Path(match)
-                if p.exists() and str(p) not in chart_paths:
-                    chart_paths.append(str(p))
-
-    st.write(content)
-
-    # Render any detected chart images
-    for chart_path in chart_paths:
-        st.image(
-            chart_path,
-            caption="📊 Generated Visualization",
-            use_container_width=True,
-        )
+        st.info("Upload files to start.")
 
 
 # ============================================================
-# MAIN UI
+# MAIN
 # ============================================================
 
 st.title("🤖 Student Data AI Agent")
 
-
 if not st.session_state.file_paths:
 
-    st.info(
-        "👈 Upload one or more CSV, Excel, or PDF files from the sidebar to start chatting."
-    )
+    st.info("Upload CSV, Excel or PDF files from the sidebar.")
 
 else:
 
-    # ========================================================
-    # LANGGRAPH CONFIG
-    # ========================================================
+    # --------------------------------------------------------
+    # Display previous conversation
+    # --------------------------------------------------------
 
-    config = {
-        "configurable": {
-            "thread_id": st.session_state.thread_id
-        }
-    }
-
-    # ========================================================
-    # RESTORE CHAT HISTORY FROM LANGGRAPH
-    # ========================================================
+    config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
     try:
-        state_snapshot = st.session_state.graph.get_state(config)
-        messages = state_snapshot.values.get("messages", [])
+        state = st.session_state.graph.get_state(config)
+        messages = state.values.get("messages", [])
 
-        pending_tools = []
         for message in messages:
             if message.type == "human":
                 with st.chat_message("user"):
                     st.write(message.content)
-                pending_tools = []
-
-            elif message.type == "tool":
-                pending_tools.append(message)
 
             elif message.type == "ai" and message.content:
                 with st.chat_message("assistant"):
-                    render_assistant_message(message.content, pending_tools)
-                pending_tools = []
+                    render_assistant_message(message.content)
 
-    except Exception as e:
-        logger.exception("Failed to restore LangGraph state")
-        st.warning(f"Unable to restore conversation: {e}")
+    except Exception as exc:
+        logger.exception("Failed to load conversation: %s", exc)
 
-    # ========================================================
-    # CHAT INPUT
-    # ========================================================
+    # --------------------------------------------------------
+    # Chat
+    # --------------------------------------------------------
 
-    question = st.chat_input(
-        "Ask a question about your uploaded documents or data..."
-    )
+    question = st.chat_input("Ask about your uploaded files...")
 
     if question:
 
-        # ----------------------------------------------------
-        # User message
-        # ----------------------------------------------------
         with st.chat_message("user"):
             st.write(question)
 
-        # ----------------------------------------------------
-        # Multi-Agent LangGraph execution
-        # ----------------------------------------------------
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing across specialized agents..."):
+            with st.spinner("Thinking..."):
                 try:
                     answer = ask_agent(
                         graph=st.session_state.graph,
@@ -239,17 +167,8 @@ else:
                         thread_id=st.session_state.thread_id,
                     )
 
-                    # Check latest state snapshot for tool messages
-                    latest_state = st.session_state.graph.get_state(config)
-                    latest_messages = latest_state.values.get("messages", [])
-                    latest_tools = [
-                        m for m in latest_messages
-                        if getattr(m, "type", "") == "tool"
-                    ]
+                    render_assistant_message(answer)
 
-                    render_assistant_message(answer, latest_tools)
-
-                except Exception as e:
-                    logger.exception("Error executing Multi-Agent LangGraph")
-                    st.error(f"Something went wrong: {e}")
-
+                except Exception as exc:
+                    logger.exception("Agent execution failed.")
+                    st.error(f"Something went wrong: {exc}")
