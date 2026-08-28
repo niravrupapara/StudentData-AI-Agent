@@ -33,13 +33,21 @@ def run_pandas_agent(file_path: Union[str, Path], user_query: str) -> str:
 
     try:
         # Load file into DataFrame(s) based on extension
-        if p.suffix.lower() == ".csv":
+        suffix = p.suffix.lower()
+        if suffix == ".csv":
             df_data = load_csv(p)
-        elif p.suffix.lower() in [".xlsx", ".xls"]:
+        elif suffix in [".xlsx", ".xls"]:
             sheets = load_excel(p)
             df_data = list(sheets.values()) if len(sheets) > 1 else list(sheets.values())[0]
         else:
-            raise ValueError(f"Unsupported tabular data format: {p.suffix}")
+            msg = (
+                f"Error: 'analyze_data' only supports CSV (.csv) and Excel (.xlsx, .xls) files, "
+                f"but received '{p.name}' ({suffix}). "
+                f"For PDF files, use the 'search_pdf' tool to extract information, "
+                f"and pass extracted numerical data directly to 'generate_chart' to create visual plots."
+            )
+            logger.warning(msg)
+            return msg
 
         # Run Pandas agent
         agent = create_pandas_agent(df_data)
@@ -48,9 +56,9 @@ def run_pandas_agent(file_path: Union[str, Path], user_query: str) -> str:
         logger.info("Pandas analysis completed successfully.")
         return output
 
-    except Exception:
-        logger.exception("Pandas analysis execution failed.")
-        raise
+    except Exception as e:
+        logger.exception("Pandas analysis execution failed: %s", e)
+        return f"Error executing data analysis on {p.name}: {e}"
 
 
 @tool

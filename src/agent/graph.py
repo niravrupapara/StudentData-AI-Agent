@@ -39,7 +39,18 @@ def ask_agent(
     config = {"configurable": {"thread_id": thread_id}}
 
     if files:
-        file_list = "\n".join(f"- {f}" for f in files)
+        formatted_files = []
+        for f in files:
+            from pathlib import Path
+            suffix = Path(f).suffix.lower()
+            if suffix in [".csv", ".xlsx", ".xls"]:
+                tag = "Tabular Data (use analyze_data)"
+            elif suffix == ".pdf":
+                tag = "PDF Document (use search_pdf)"
+            else:
+                tag = "Document/File"
+            formatted_files.append(f"- {f} [{tag}]")
+        file_list = "\n".join(formatted_files)
         formatted_question = f"Available Files:\n{file_list}\n\nUser Question:\n{question}"
     else:
         formatted_question = question

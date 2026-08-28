@@ -12,7 +12,6 @@ langchain-experimental
 langchain-mistralai
 langgraph
 langchain-huggingface
-sentence-transformers
 faiss-cpu
 matplotlib
 seaborn
