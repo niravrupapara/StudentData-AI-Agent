@@ -37,38 +37,31 @@ if "thread_id" not in st.session_state:
 if "file_paths" not in st.session_state:
     st.session_state.file_paths = []
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 
 # ============================================================
 # HELPER - RENDER MESSAGE & CHARTS
 # ============================================================
 
-def render_assistant_message(content: str, artifacts: list[dict] | None = None):
-    """Display assistant response and render any generated chart artifacts."""
-    st.write(content)
+def render_assistant_message(
+    content: str,
+    artifacts: list[dict] | None = None,
+):
+    st.markdown(content)
 
-    if artifacts:
-        rendered = set()
-        for art in artifacts:
-            if isinstance(art, dict) and art.get("type") == "image":
-                path_val = art.get("path")
-                if path_val:
-                    candidates = [
-                        Path(path_val),
-                        Path(path_val).resolve(),
-                        Path("data/charts") / Path(path_val).name,
-                    ]
-                    for p in candidates:
-                        if p.exists() and str(p.resolve()) not in rendered:
-                            logger.info("Rendering chart image | path=%s", p)
-                            st.image(
-                                str(p),
-                                caption="📊 Generated Visualization",
-                                width="stretch",
-                            )
-                            rendered.add(str(p.resolve()))
-                            break
+    for artifact in artifacts or []:
+        if not isinstance(artifact, dict):
+            continue
 
+        if artifact.get("type") != "image":
+            continue
 
+        path = Path(artifact.get("path", ""))
+
+        if path.exists():
+            st.image(path, width="stretch")
 # ============================================================
 # SIDEBAR - FILE UPLOAD
 # ============================================================
@@ -129,31 +122,16 @@ else:
     # Display previous conversation
     # --------------------------------------------------------
 
-    config = {"configurable": {"thread_id": st.session_state.thread_id}}
-
-    try:
-        state = st.session_state.graph.get_state(config)
-        messages = state.values.get("messages", [])
-
-        pending_artifacts = []
-        for message in messages:
-            if message.type == "human":
-                pending_artifacts = []
-                with st.chat_message("user"):
-                    st.write(message.content)
-
-            elif message.type == "tool":
-                artifact = getattr(message, "artifact", None)
-                if isinstance(artifact, dict) and artifact.get("type") == "image":
-                    pending_artifacts.append(artifact)
-
-            elif message.type == "ai" and message.content:
-                with st.chat_message("assistant"):
-                    render_assistant_message(message.content, artifacts=pending_artifacts)
-                pending_artifacts = []
-
-    except Exception as exc:
-        logger.exception("Failed to load conversation: %s", exc)
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            with st.chat_message("user"):
+                st.write(msg["content"])
+        elif msg["role"] == "assistant":
+            with st.chat_message("assistant"):
+                render_assistant_message(
+                    content=msg["content"],
+                    artifacts=msg.get("artifacts", []),
+                )
 
     # --------------------------------------------------------
     # Chat
@@ -163,6 +141,7 @@ else:
 
     if question:
 
+        st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.write(question)
 
@@ -179,6 +158,14 @@ else:
                     render_assistant_message(
                         content=response["content"],
                         artifacts=response.get("artifacts", []),
+                    )
+
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": response["content"],
+                            "artifacts": response.get("artifacts", []),
+                        }
                     )
 
                 except Exception as exc:
