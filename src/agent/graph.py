@@ -30,30 +30,14 @@ def build_agent_graph(checkpointer=None):
 def ask_agent(
     graph,
     question: str,
-    files: list[str] | None = None,
     thread_id: str = "default_session",
 ) -> dict:
-    """Submit a question to the ReAct agent with conversation thread and file context."""
+    """Submit a question to the ReAct agent with conversation thread."""
     logger.info("ask_agent invoked | thread_id=%s | question=%s", thread_id, question)
 
     config = {"configurable": {"thread_id": thread_id}}
 
-    if files:
-        formatted_files = []
-        for f in files:
-            from pathlib import Path
-            suffix = Path(f).suffix.lower()
-            if suffix in [".csv", ".xlsx", ".xls"]:
-                tag = "Tabular Data (use analyze_data)"
-            elif suffix == ".pdf":
-                tag = "PDF Document (use search_pdf)"
-            else:
-                tag = "Document/File"
-            formatted_files.append(f"- {f} [{tag}]")
-        file_list = "\n".join(formatted_files)
-        formatted_question = f"Available Files:\n{file_list}\n\nUser Question:\n{question}"
-    else:
-        formatted_question = question
+    formatted_question = question
 
     result = graph.invoke(
         {"messages": [HumanMessage(content=formatted_question)]},

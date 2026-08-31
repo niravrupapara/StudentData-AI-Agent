@@ -4,7 +4,10 @@ import uuid
 import streamlit as st
 
 from src.agent.graph import ask_agent, build_agent_graph
-from src.tools.pdf_tool import get_or_create_faiss_retriever
+from src.agent.pandas_agent import register_dataframe
+from src.ingestion.loaders import load_csv, load_excel, load_parquet, load_pdf_pages, load_text
+from src.tools.document_store import register_document
+from src.agent.document_agent import invalidate_agent
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -34,11 +37,11 @@ if "graph" not in st.session_state:
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
-if "file_paths" not in st.session_state:
-    st.session_state.file_paths = []
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "has_files" not in st.session_state:
+    st.session_state.has_files = False
 
 
 # ============================================================
@@ -66,37 +69,54 @@ def render_assistant_message(
 # SIDEBAR - FILE UPLOAD
 # ============================================================
 
+STRUCTURED_EXTS = {".csv", ".xlsx", ".xls", ".parquet"}
+
 with st.sidebar:
 
     st.header("📁 Upload Files")
 
     uploaded_files = st.file_uploader(
-        "Upload CSV, Excel or PDF",
-        type=["csv", "xlsx", "xls", "pdf"],
+        "Upload CSV, Excel, Parquet, PDF, or TXT",
+        type=["csv", "xlsx", "xls", "parquet", "pdf", "txt"],
         accept_multiple_files=True,
     )
 
     if uploaded_files:
 
-        file_paths = []
-
         for uploaded_file in uploaded_files:
 
             file_path = UPLOAD_DIR / uploaded_file.name
 
-            # Save file
+            # Save file to disk
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            file_paths.append(str(file_path.resolve()))
+            suffix = file_path.suffix.lower()
 
-            # Pre-index PDF with FAISS on upload
-            if file_path.suffix.lower() == ".pdf":
-                get_or_create_faiss_retriever(file_path)
+            if suffix in STRUCTURED_EXTS:
+                # Load into DataFrame and register for cached pandas agent
+                if suffix == ".csv":
+                    df = load_csv(file_path)
+                    register_dataframe(uploaded_file.name, df)
+                elif suffix in (".xlsx", ".xls"):
+                    sheets = load_excel(file_path)
+                    for sheet_name, df in sheets.items():
+                        register_dataframe(f"{uploaded_file.name}:{sheet_name}", df)
+                elif suffix == ".parquet":
+                    df = load_parquet(file_path)
+                    register_dataframe(uploaded_file.name, df)
+
+            elif suffix == ".pdf":
+                register_document(uploaded_file.name, "", file_type="pdf", pages=load_pdf_pages(file_path))
+                invalidate_agent()
+
+            elif suffix == ".txt":
+                register_document(uploaded_file.name, load_text(file_path), file_type="txt")
+                invalidate_agent()
 
             logger.info("File uploaded: %s", uploaded_file.name)
 
-        st.session_state.file_paths = file_paths
+        st.session_state.has_files = True
         st.success(f"{len(uploaded_files)} file(s) uploaded")
 
         for file in uploaded_files:
@@ -112,9 +132,9 @@ with st.sidebar:
 
 st.title("🤖 Student Data AI Agent")
 
-if not st.session_state.file_paths:
+if not st.session_state.has_files:
 
-    st.info("Upload CSV, Excel or PDF files from the sidebar.")
+    st.info("Upload CSV, Excel, Parquet or PDF files from the sidebar.")
 
 else:
 
@@ -151,7 +171,6 @@ else:
                     response = ask_agent(
                         graph=st.session_state.graph,
                         question=question,
-                        files=st.session_state.file_paths,
                         thread_id=st.session_state.thread_id,
                     )
 

@@ -94,3 +94,36 @@ def load_pdf(file_source: FileSource) -> str:
     except Exception as e:
         logger.exception("Failed to load PDF file: %s", file_source)
         raise ValueError(f"Error loading PDF file: {e}") from e
+
+
+def load_parquet(file_source: FileSource) -> pd.DataFrame:
+    """Load and validate a Parquet file into a Pandas DataFrame."""
+    logger.info("Loading Parquet data source: %s", file_source)
+
+    try:
+        df = pd.read_parquet(file_source)
+
+        if df.empty:
+            logger.error("Loaded Parquet file is empty: %s", file_source)
+            raise ValueError("The provided Parquet file contains no data.")
+
+        logger.info(
+            "Parquet loaded successfully | rows=%d | columns=%d",
+            len(df),
+            len(df.columns),
+        )
+        return df
+
+    except Exception as e:
+        logger.exception("Failed to load Parquet file: %s", file_source)
+        raise ValueError(f"Error loading Parquet file: {e}") from e
+
+def load_text(file_source: FileSource) -> str:
+    """Load text file content."""
+    if isinstance(file_source, io.BytesIO):
+        return file_source.read().decode("utf-8")
+    return Path(file_source).read_text(encoding="utf-8")
+
+def load_pdf_pages(file_source: FileSource) -> list[str]:
+    """Load PDF into a list of page strings."""
+    return [p.extract_text() for p in PdfReader(file_source).pages]

@@ -1,6 +1,7 @@
 streamlit
 pandas
 openpyxl
+pyarrow
 pypdf
 pyyaml
 python-dotenv

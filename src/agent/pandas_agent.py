@@ -1,68 +1,78 @@
-from pathlib import Path
-from typing import Sequence, Union
-
 from langchain_core.tools import tool
 from langchain_experimental.agents import create_pandas_dataframe_agent
 import pandas as pd
 
-from src.ingestion.loaders import load_csv, load_excel
 from src.llm import get_llm
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# ── Cache ──────────────────────────────────────────────────
+_DF_REGISTRY: dict[str, pd.DataFrame] = {}   # name → DataFrame
+_CACHED_AGENT = None                          # reused across queries
 
-def create_pandas_agent(df: Union[pd.DataFrame, Sequence[pd.DataFrame]]):
-    """Create a LangChain Pandas DataFrame Agent for single or multiple DataFrames."""
-    logger.info("Initializing Pandas DataFrame Sub-Agent...")
-    llm = get_llm()
 
-    return create_pandas_dataframe_agent(
-        llm=llm,
-        df=df,
+def register_dataframe(name: str, df: pd.DataFrame):
+    """Add a DataFrame to the registry. Invalidates the cached agent."""
+    global _CACHED_AGENT
+    _DF_REGISTRY[name] = df
+    _CACHED_AGENT = None  # force rebuild on next query
+    logger.info("Registered DataFrame '%s' | shape=%s", name, df.shape)
+
+
+def get_cached_agent():
+    """Return the cached pandas agent, or build one from all registered DFs."""
+    global _CACHED_AGENT
+
+    if _CACHED_AGENT is not None:
+        return _CACHED_AGENT
+
+    if not _DF_REGISTRY:
+        return None
+
+    dfs = list(_DF_REGISTRY.values())
+    df_input = dfs[0] if len(dfs) == 1 else dfs
+
+    logger.info("Building pandas agent with %d DataFrame(s)...", len(dfs))
+    _CACHED_AGENT = create_pandas_dataframe_agent(
+        llm=get_llm(),
+        df=df_input,
         agent_type="tool-calling",
         verbose=True,
         allow_dangerous_code=True,
     )
+    return _CACHED_AGENT
 
 
-def run_pandas_agent(file_path: Union[str, Path], user_query: str) -> str:
-    """Load CSV or Excel file into DataFrame(s) and query with Pandas Sub-Agent."""
-    logger.info("Running Pandas analysis | file=%s | query=%s", file_path, user_query)
-    p = Path(file_path)
-
-    try:
-        # Load file into DataFrame(s) based on extension
-        suffix = p.suffix.lower()
-        if suffix == ".csv":
-            df_data = load_csv(p)
-        elif suffix in [".xlsx", ".xls"]:
-            sheets = load_excel(p)
-            df_data = list(sheets.values()) if len(sheets) > 1 else list(sheets.values())[0]
-        else:
-            msg = (
-                f"Error: 'analyze_data' only supports CSV (.csv) and Excel (.xlsx, .xls) files, "
-                f"but received '{p.name}' ({suffix}). "
-                f"For PDF files, use the 'search_pdf' tool to extract information, "
-                f"and pass extracted numerical data directly to 'generate_chart' to create visual plots."
-            )
-            logger.warning(msg)
-            return msg
-
-        # Run Pandas agent
-        agent = create_pandas_agent(df_data)
-        response = agent.invoke({"input": user_query})
-        output = response.get("output", "No response generated.")
-        logger.info("Pandas analysis completed successfully.")
-        return output
-
-    except Exception as e:
-        logger.exception("Pandas analysis execution failed: %s", e)
-        return f"Error executing data analysis on {p.name}: {e}"
+def reset_agent():
+    """Clear all registered DataFrames and the cached agent."""
+    global _CACHED_AGENT
+    _DF_REGISTRY.clear()
+    _CACHED_AGENT = None
+    logger.info("Pandas agent cache cleared.")
 
 
 @tool
-def analyze_data(file_path: str, query: str) -> str:
-    """Analyze a CSV or Excel file using the Pandas DataFrame Agent to answer data and aggregation questions."""
-    logger.info("Tool analyze_data called | file=%s | query=%s", file_path, query)
-    return run_pandas_agent(file_path=file_path, user_query=query)
+def analyze_data(query: str) -> str:
+    """Analyze the uploaded CSV, Excel, or Parquet data using a Pandas agent.
+
+    All structured files are pre-loaded. Just pass your question.
+
+    Args:
+        query: Natural-language question about the data.
+
+    Returns:
+        Text answer with the analysis result.
+    """
+    logger.info("Tool analyze_data called | query=%s", query)
+
+    agent = get_cached_agent()
+    if agent is None:
+        return "No structured data files have been uploaded yet."
+
+    try:
+        response = agent.invoke({"input": query})
+        return response.get("output", "No response generated.")
+    except Exception as e:
+        logger.exception("Pandas analysis failed: %s", e)
+        return f"Error during data analysis: {e}"
