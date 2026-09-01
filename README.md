@@ -1,197 +1,88 @@
-﻿# 🎓 Student Data AI Agent
+# 🎓 Student Data AI Agent
 
-> **An intelligent conversational data analyst for student datasets — powered by LangChain Pandas DataFrame Agent and orchestrated with LangGraph for persistent multi-turn chat memory.**
+> **An intelligent multi-modal conversational AI agent. Analyze tabular datasets, query documents, generate charts, and debug log files — all by just asking questions in plain English!**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Orchestration-LangGraph%20%7C%20LangChain-green.svg)](https://langchain-ai.github.io/langgraph/)
-[![Agent Engine](https://img.shields.io/badge/Agent-Pandas%20DataFrame%20Agent-blueviolet.svg)](https://python.langchain.com/docs/integrations/toolkits/pandas/)
 [![LLM](https://img.shields.io/badge/LLM-Mistral%20AI%20(mistral--small--latest)-orange.svg)](https://mistral.ai/)
 [![UI](https://img.shields.io/badge/UI-Streamlit-red.svg)](https://streamlit.io/)
-[![Validation](https://img.shields.io/badge/Tested%20%26%20Verified-ChatGPT%20Share-brightgreen.svg)](https://chatgpt.com/share/6a899e16-f248-83e9-95bb-ec6c6e2238e5)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
 ---
 
 ## 🌟 Overview
 
-The **Student Data AI Agent** enables educators, administrators, and researchers to explore and query tabular student datasets (`.csv`) using natural language. Instead of writing complex SQL queries or Pandas code manually, users can simply ask questions in plain English.
+The **Student Data AI Agent** is a powerful system that lets you interact with diverse types of files (CSV, Excel, Parquet, PDF, TXT, and LOG) using natural language. 
 
-The system combines two modern AI engineering paradigms:
-1. **LangChain Pandas DataFrame Agent**: Converts natural language into valid Pandas Python expressions executed directly on the in-memory dataset with full analytical accuracy.
-2. **LangGraph State & Memory Persistence**: Orchestrates the agent inside a stateful graph using `MemorySaver`, maintaining conversation context across multi-turn follow-up questions.
-3. **Single Source of Truth Frontend**: The Streamlit interface renders chat history directly from LangGraph's state snapshot (`graph.get_state()`), eliminating redundant state management.
-
----
-
-## 🧪 Tested & Verified
-
-This architecture and agent prompt workflow have been verified and tested:  
-👉 **[View Test & Validation Transcript on ChatGPT](https://chatgpt.com/share/6a899e16-f248-83e9-95bb-ec6c6e2238e5)**
+Instead of writing code or complex queries, you can just ask questions like *"What is the average GPA of students in Computer Science?"* or *"Can you create a bar chart of attendance?"*
 
 ---
 
 ## ✨ Key Features
 
-- 💬 **Natural Language Data Querying**: Ask questions in plain English; the agent generates and executes accurate Pandas expressions.
-- 🧠 **Persistent Multi-Turn Context**: Remembers prior questions and calculations within a session (e.g. *"Show students with GPA > 3.8"*, then *"What is their average attendance?"*).
-- 🖥️ **Interactive Streamlit Web UI**: Simple CSV drag-and-drop upload with live row/column metrics and chat bubbles.
-- 🎯 **Direct State Synchronization**: Frontend chat history is read directly from LangGraph state snapshots (`graph.get_state()`).
-- ⚡ **Mistral AI Integration**: Powered by `mistral-small-latest` with `temperature=0` for deterministic, hallucination-free code execution.
-- 🧩 **Decoupled Modular Architecture**: Clean single-responsibility separation across state, agent creation, node execution, graph assembly, and runners.
-- 🪵 **Centralized Logging**: Simultaneous live console logging and persistent file logging in `logs/app.log`.
+- 💬 **Natural Language Data Querying**: Ask complex analytical questions over structured datasets.
+- 📄 **Document QA**: Ask questions and get answers from your uploaded PDFs and text documents.
+- 🐞 **Log Debugging**: Upload application `.log` files. The agent will read them, find what caused a crash, and tell you how to fix it in simple terms.
+- 📊 **Dynamic Chart Generation**: Generate beautiful data visualizations instantly.
+- 🧠 **Smart Memory**: The agent remembers your previous questions in the chat, allowing you to ask follow-up questions seamlessly.
+- 🖥️ **Interactive Web UI**: A simple, user-friendly interface where you can drag-and-drop files and chat.
 
 ---
 
-## 🔄 LangGraph StateGraph Architecture
+## 🧠 How It Works (Simple Explanation)
 
+Think of this system as a highly organized office with a **Manager** and several **Specialist Employees**:
+
+1. **You ask a question**: You type a request into the chat (e.g., *"Make a chart of student grades"*).
+2. **The Manager decides**: The "Supervisor" agent reads your question and figures out who is best suited to answer it.
+3. **The Specialists do the work**:
+   - 📊 **The Data Analyst**: Handles spreadsheets (CSV/Excel) and calculates numbers.
+   - 📖 **The Librarian**: Reads through PDFs and text files to find quotes and answers.
+   - 🎨 **The Artist**: Draws charts and graphs based on your data.
+   - 🛠️ **The IT Technician**: Reads computer `.log` files to figure out why an app crashed.
+4. **You get your answer**: The specialist finishes their task, hands it back to the Manager, and the Manager replies to you in the chat!
+
+### Architecture Flowchart
 ```mermaid
 flowchart TD
-    START((● START)) --> StateCheck["1. Load AgentState from MemorySaver<br/>(thread_id session history)"]
+    User["👤 You (Ask a Question)"] --> Supervisor["👔 The Manager (Supervisor Agent)"]
     
-    StateCheck --> AgentNode["2. Node: agent (execute_pandas_agent)"]
-    
-    subgraph Execution["🤖 LangChain DataFrame Agent Execution"]
-        AgentNode --> Generate["Generate Pandas Python Expression"]
-        Generate --> Run["Execute on in-memory DataFrame (df)"]
-        Run --> Synthesize["Synthesize Natural Language Answer"]
-    end
-    
-    Synthesize --> StateUpdate["3. Update AgentState<br/>(Append AIMessage via add_messages reducer)"]
-    StateUpdate --> SaveMemory[("💾 Save to MemorySaver Checkpointer<br/>(Preserves state for thread_id)")]
-    StateUpdate --> END((● END))
+    Supervisor --> |Spreadsheets & Data| PandasAgent["📊 Data Analyst (Pandas Agent)"]
+    Supervisor --> |Reading PDFs| DocAgent["📖 Librarian (Document Agent)"]
+    Supervisor --> |Drawing Charts| ChartTool["🎨 Artist (Chart Tool)"]
+    Supervisor --> |Fixing Errors| LogAgent["🛠️ IT Tech (Log Agent)"]
 
-    style START fill:#4CAF50,stroke:#2E7D32,color:#fff
-    style END fill:#F44336,stroke:#C62828,color:#fff
-    style SaveMemory fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
-    style Execution fill:#FFF8E1,stroke:#FFA000,stroke-width:2px
+    PandasAgent --> Output["Answer given back to you!"]
+    DocAgent --> Output
+    ChartTool --> Output
+    LogAgent --> Output
 ```
 
 ---
 
-## 📁 Project Directory Structure
+## 💻 How to Run the App
 
-```text
-StudentData-AI-Agent/
-│
-├── app.py                    # 🖥️ Streamlit Web Application (Frontend)
-├── requirements.txt          # 📦 Python Dependencies
-├── .env.example              # ⚙️ Environment Variables Template
-├── README.md                 # 📖 Project Documentation
-│
-├── config/
-│   └── settings.py           # ⚙️ Typed Configuration Loader (.env)
-│
-├── data/
-│   └── .gitkeep              # 📊 Dataset Directory Placeholder
-│
-├── logs/
-│   └── .gitkeep              # 📝 Application Log Storage (logs/app.log)
-│
-├── src/
-│   ├── __init__.py
-│   ├── data_loader.py        # 📥 CSV Ingestion & Validation (load_csv)
-│   ├── llm.py                # 🧠 Mistral LLM Client Factory (get_llm)
-│   │
-│   ├── agent/                # 🤖 Decoupled LangGraph Agent Modules
-│   │   ├── __init__.py
-│   │   ├── state.py          # 1. State Definition (AgentState with add_messages)
-│   │   ├── pandas_agent.py   # 2. LangChain Pandas DataFrame Agent Factory
-│   │   ├── nodes.py          # 3. LangGraph Node Execution Logic
-│   │   ├── graph.py          # 4. StateGraph Assembly & MemorySaver
-│   │   └── runner.py         # 5. Graph Invocation & State Retrieval
-│   │
-│   └── utils/
-│       └── logger.py         # 🪵 Centralized Logging (Console + logs/app.log)
-│
-└── tests/
-    └── test_agent.py         # 🧪 Standalone CLI Test Runner
-```
+All you need to do to start the application is run this simple command in your terminal:
 
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Description |
-| :--- | :--- | :--- |
-| **Language** | Python 3.10+ | Core programming runtime |
-| **Agent Framework** | LangChain Experimental | `create_pandas_dataframe_agent` with native tool-calling |
-| **State Orchestration** | LangGraph | `StateGraph` with `MemorySaver` checkpointer for conversation memory |
-| **LLM Provider** | Mistral AI | `mistral-small-latest` via `ChatMistralAI` |
-| **Data Engine** | Pandas | High-performance tabular data manipulation |
-| **User Interface** | Streamlit | Web application with live chat interface |
-| **Configuration** | Python-Dotenv | Secure environment variables management |
-
----
-
-## 🚀 Quick Start Guide
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/niravrupapara/StudentData-AI-Agent.git
-cd StudentData-AI-Agent
-```
-
-### 2. Set Up Virtual Environment
-```powershell
-# On Windows PowerShell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# On Linux / macOS
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-Create a `.env` file in the project root directory:
-```ini
-# Mistral AI API Key (Required)
-MISTRAL_API_KEY=your_mistral_api_key_here
-
-# LLM Model Name (Optional, defaults to mistral-small-latest)
-LLM_MODEL=mistral-small-latest
-
-# Logging Level (Optional: DEBUG, INFO, WARNING, ERROR)
-LOG_LEVEL=INFO
-```
-
----
-
-## 💻 Running the Application
-
-### 🖥️ Option 1: Streamlit Web UI (Recommended)
 ```bash
 streamlit run app.py
 ```
-Open your browser and navigate to `http://localhost:8501`. Upload any student CSV dataset from the sidebar to start chatting!
 
-### 🧪 Option 2: CLI Test Runner
-```bash
-python -m tests.test_agent
-```
+Open your browser to `http://localhost:8501`. 
+
+**How to Use:**
+1. Upload your files from the sidebar (`.csv`, `.xlsx`, `.pdf`, `.txt`, `.log`).
+2. Ask questions in the chat!
 
 ---
 
-## 💡 Example Queries
+## 💡 Example Things You Can Ask
 
-| Category | Example Question |
+| Feature | Example Question |
 | :--- | :--- |
-| **📊 Aggregation & Stats** | *"How many total students are in the dataset?"*<br/>*"What is the average GPA across all branches?"*<br/>*"Show the count of students per branch."* |
-| **🔍 Filtering & Ranking** | *"List the top 5 students in Computer Science by score."*<br/>*"Find students with attendance lower than 75%."*<br/>*"Who is the highest scoring female student in Electrical?"* |
-| **💬 Multi-Turn Follow-Ups** | **User**: *"How many students are in Mechanical?"*<br/>**AI**: *"There are 42 students in Mechanical."*<br/>**User**: *"What is their average score?"*<br/>**AI**: *"The average score of students in Mechanical is 78.4."* |
-
----
-
-## 🪵 Logging & Diagnostics
-
-Application logs are written simultaneously to:
-- **Console (stdout)**: Colored, formatted real-time logs.
-- **Log File**: Persistent logging saved at `logs/app.log`.
+| **📊 Tabular Data** | *"How many total students are in the dataset?"*<br/>*"What is the average GPA of Female students in Computer Science?"* |
+| **📈 Visualizations** | *"Plot a bar chart showing the number of students per branch. Make it blue."*<br/>*"Create a scatter plot of Attendance vs Score."* |
+| **📄 Documents (PDF/TXT)** | *"According to the uploaded syllabus PDF, what are the grading criteria?"* |
+| **🐞 Log Analysis** | *"Analyze the uploaded server.log. Why did the server crash and how do I fix it?"* |
 
 ---
 
