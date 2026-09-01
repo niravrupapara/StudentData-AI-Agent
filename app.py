@@ -76,8 +76,8 @@ with st.sidebar:
     st.header("📁 Upload Files")
 
     uploaded_files = st.file_uploader(
-        "Upload CSV, Excel, Parquet, PDF, or TXT",
-        type=["csv", "xlsx", "xls", "parquet", "pdf", "txt"],
+        "Upload CSV, Excel, Parquet, PDF, TXT, or LOG",
+        type=["csv", "xlsx", "xls", "parquet", "pdf", "txt", "log"],
         accept_multiple_files=True,
     )
 
@@ -114,6 +114,10 @@ with st.sidebar:
                 register_document(uploaded_file.name, load_text(file_path), file_type="txt")
                 invalidate_agent()
 
+            elif suffix == ".log":
+                # Handled natively by log_tool reading from disk
+                pass
+
             logger.info("File uploaded: %s", uploaded_file.name)
 
         st.session_state.has_files = True
@@ -134,7 +138,7 @@ st.title("🤖 Student Data AI Agent")
 
 if not st.session_state.has_files:
 
-    st.info("Upload CSV, Excel, Parquet or PDF files from the sidebar.")
+    st.info("Upload CSV, Excel, Parquet, PDF, TXT, or LOG files from the sidebar.")
 
 else:
 

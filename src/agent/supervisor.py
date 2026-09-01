@@ -1,11 +1,13 @@
 from src.agent.pandas_agent import analyze_data
 from src.agent.document_agent import search_documents
 from src.tools.chart_tool import create_visualization
+from src.agent.log_agent import analyze_logs
 
 SUPERVISOR_TOOLS = [
     analyze_data,
     search_documents,
     create_visualization,
+    analyze_logs,
 ]
 
 SUPERVISOR_SYSTEM_PROMPT = """You are the Supervisor Agent of a student data analysis system.
@@ -23,9 +25,14 @@ Available Tools:
    Create a chart based on the provided data and metadata.
    Pass the exact data values (x and y points) and styling requirements in the prompt.
 
+4. analyze_logs(query):
+   Analyze uploaded log files (.log) to find errors, root causes, and solutions.
+   Pass the user's query containing the error or issue they are investigating.
+
 Workflow:
 - For tabular data questions → use analyze_data
 - For document/PDF/text questions → use search_documents
+- For log file questions (errors, stack traces, root cause) → use analyze_logs
 - For charts → First gather the raw data values using analyze_data. Then pass those raw data values, chart type, and styling preferences to the create_visualization tool.
 
 Always give clear, concise final answers.
