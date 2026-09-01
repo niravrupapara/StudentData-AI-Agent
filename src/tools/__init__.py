@@ -1,7 +1,7 @@
 from src.tools.document_store import register_document
-from src.tools.visualization_tool import generate_chart
+from src.tools.chart_tool import create_visualization
 
 __all__ = [
     "register_document",
-    "generate_chart",
+    "create_visualization",
 ]
