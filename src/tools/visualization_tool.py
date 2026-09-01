@@ -19,15 +19,21 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @tool(response_format="content_and_artifact")
-def generate_chart(python_code: str) -> tuple[str, dict]:
+def generate_chart(python_code: str, filename: str = None) -> tuple[str, dict]:
     """Execute Python matplotlib/seaborn code to generate and save a chart visualization to data/charts/.
 
     The code should assume standard libraries (plt, sns, pd, np) are available.
     All charts will be automatically saved into data/charts/.
     """
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
-    chart_id = uuid.uuid4().hex[:8]
-    chart_filename = f"chart_{chart_id}.png"
+    chart_id = uuid.uuid4().hex[:4]
+    
+    if filename:
+        safe_name = filename.strip().replace(" ", "_").replace(".png", "").lower()
+        chart_filename = f"{safe_name}_{chart_id}.png"
+    else:
+        chart_filename = f"chart_{chart_id}.png"
+        
     chart_path = CHARTS_DIR / chart_filename
 
     logger.info("Executing chart generation code | target_path=%s", chart_path)

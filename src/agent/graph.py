@@ -1,6 +1,6 @@
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 from src.agent.supervisor import SUPERVISOR_SYSTEM_PROMPT, SUPERVISOR_TOOLS
 from src.llm import get_llm
@@ -16,10 +16,10 @@ def build_agent_graph(checkpointer=None):
     memory = checkpointer if checkpointer is not None else MemorySaver()
 
     # Prebuilt LangGraph ReAct Agent
-    agent = create_react_agent(
+    agent = create_agent(
         model=llm,
         tools=SUPERVISOR_TOOLS,
-        prompt=SUPERVISOR_SYSTEM_PROMPT,
+        system_prompt=SUPERVISOR_SYSTEM_PROMPT,
         checkpointer=memory,
     )
 
